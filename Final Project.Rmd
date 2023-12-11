@@ -1,0 +1,122 @@
+---
+title: "Analysis of Filtration Efficiency of different materials"
+author: "Zelin Chen"
+date: "2023-12-08"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE,
+                      fig.align = "center")
+```
+
+## Data Access
+
+```{r access, echo=FALSE}
+library(readr)
+mask_data <- read_csv("Filtration Efficiency Data.csv", col_names = FALSE)
+head(mask_data)
+```
+
+The research question of the project is find the most efficient filter fabric or mask. And when tested under standardized conditions, how efficient is the filtration of each test object?
+
+## Data Wrangling
+
+```{r wrangling, echo=FALSE}
+library(tidyr)
+library(dplyr)
+library(knitr)
+library(tidyverse)
+
+product_names <- mask_data[seq(1, nrow(mask_data), by = 3), 1]
+
+test_results <- mask_data[-seq(1, nrow(mask_data), by = 3),]
+test_results <- cbind(Product = rep(unlist(product_names), each = 2), test_results)
+
+colnames(test_results) <- c("Product", "Condition", paste("Test", 1:10))
+
+test_results <- test_results %>%
+  mutate(across(starts_with("Test"), as.numeric)) %>%
+  mutate(Total_Sum = rowSums(select(., starts_with("Test")), na.rm = TRUE))
+
+upstream_data <- test_results[c(TRUE, FALSE), ]
+downstream_data <- test_results[c(FALSE, TRUE), ]
+
+calculate_fe <- function(upstream, downstream) {
+  efficiency <- 1 - (downstream / upstream)
+  return(round(efficiency, 4))
+}
+
+fe_data <- upstream_data %>%
+  mutate(.,Efficiency = calculate_fe(upstream_data$Total_Sum, downstream_data$Total_Sum)) %>%
+  select(Product, Efficiency) %>%
+  arrange(desc(Efficiency))
+
+test_efficiency <- upstream_data
+test_efficiency[3:12] <- (calculate_fe(upstream_data[3:12], downstream_data[3:12]))
+test_efficiency <- test_efficiency %>%
+  select(., Product, starts_with("Test"))
+
+viewable_test_efficiency <- test_efficiency %>%
+  kable(
+    caption = "Filtration Efficiency in Each Test"
+  )
+
+viewable_fe_data <- fe_data %>%
+  kable(
+    caption = "Average Filtration Efficiency"
+  )
+
+print(viewable_test_efficiency)
+print(viewable_fe_data)
+```
+
+There are 10 tests for each materials in total, the first table shows the filtration efficiency of different materials in each test. The second table shows the filtration efficiency of different materials from high to low. From Average Filtration Efficiency table, it is easy to see the 3m Dust Mask has the highest FE among masks, the Jeans Denim has the highest Fe among fabrics.
+
+## Data Visualization
+
+```{r plotting, echo=FALSE}
+library(ggplot2)
+
+# Using the fe_data from the previous step
+# Assuming fe_data has columns Product and Filtration_Efficiency
+
+# Visualize the filtration efficiency of each material with a bar plot
+ggplot(fe_data, aes(x = reorder(Product, Efficiency), y = Efficiency, fill = Product)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(
+    title = "Filtration Efficiency of Different Materials or Masks",
+    x = "Material",
+    y = "Filtration Efficiency",
+    fill = "Material"
+  ) +
+  coord_flip()
+
+long_efficiency_data <- pivot_longer(test_efficiency, cols = starts_with("Test "), 
+                                     names_to = "Test", values_to = "Efficiency")
+
+ggplot(long_efficiency_data, aes(x = Test, y = Efficiency, group = Product, color = Product)) +
+  geom_line() + 
+  geom_point() +
+  theme_bw() +
+  labs(title = "Filtration Efficiency Across Different Tests",
+       x = "Test Number",
+       y = "Filtration Efficiency") +
+  ylim(0.1, 0.6) +
+  scale_x_discrete(labels = function(x) str_replace(x, "Test ", "")) +
+  facet_wrap(~Product, scales = "free_y")
+
+ggplot(long_efficiency_data, aes(x = Test, y = Efficiency, color = Product)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE) +
+  theme_bw() +
+  labs(title = "Smoothed Filtration Efficiency",
+       x = "Test Number",
+       y = "Filtration Efficiency")
+```
+
+According to the visualization, we can find out 3m Dust Mask not only has the highest FE, also very stable during the tests. While the result in test 1 of Jeans Denim is significantly greater than that of the rest of the tests. In conclusion, different types of masks have good filtration efficiency, especially 3m Dusk Mask. And in situations where no mask can be used, such as a fire, Jeans Denim can be used as a temporary alternative because of its filtration efficiency that is no less than that of a medical mask.
